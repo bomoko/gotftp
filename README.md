@@ -11,6 +11,14 @@ So, now, I'm going to implement it in golang, and maybe try do something interes
 * Reading the source of https://github.com/vcabbage/go-tftp is useful - I'll probably steal some of the ways of working with the datagrams from there.
 
 
+#### Bytes and stuff
+When working with the byte level stuff, it's interesting - look at the `opcode` implementation for instance
+as it currently stands, it takes in a `uint16` which is a _two_ byte unsigned integer.
+
+What's interesting here is that when I pull the opcode from the raw bytes, I have to pull out the first two bytes, then convert
+
+This is obvious, but I'm just noting it here as part of the dev notes.
+
 
 ## Some notes about tftp and how it works
 
