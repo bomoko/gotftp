@@ -110,6 +110,11 @@ func TestDatagramBuffer_ReadUntilDelimiter(t *testing.T) {
 }
 
 func Test_destructureDatagramRRQ(t *testing.T) {
+
+	opcode01 := []byte{0x0, 0x1}
+	filenameByteArray := append(append(opcode01, []byte("hello.txt")...), 0x0)
+	octectPayloadByteArray := append(append(filenameByteArray, []byte("octet")...), 0x0)
+
 	type args struct {
 		d   DatagramBuffer
 		ret *Datagram
@@ -119,21 +124,40 @@ func Test_destructureDatagramRRQ(t *testing.T) {
 		args         args
 		wantErr      bool
 		wantFilename string
+		wantMode     string
 	}{
 		{
 			name: "read in filename",
 			args: args{
 				d: DatagramBuffer{
-					Buffer: append(append([]byte{0x0, 0x1}, []byte("hello.txt")...), 0x0),
+					Buffer: octectPayloadByteArray,
 					Offset: 0,
 				},
 				ret: &Datagram{
 					Opcode:      "",
 					RrqFilename: "",
+					RrqMode:     "",
 				},
 			},
 			wantErr:      false,
 			wantFilename: "hello.txt",
+		},
+		{
+			name: "Check mode",
+			args: args{
+				d: DatagramBuffer{
+					Buffer: octectPayloadByteArray,
+					Offset: 0,
+				},
+				ret: &Datagram{
+					Opcode:      "",
+					RrqFilename: "",
+					RrqMode:     "",
+				},
+			},
+			wantErr:      false,
+			wantFilename: "hello.txt",
+			wantMode:     "octet",
 		},
 	}
 	for _, tt := range tests {

@@ -19,8 +19,8 @@ func (d *DatagramBuffer) ReadUntilDelimiter() []byte {
 	for _, data := range d.Buffer[d.Offset:] {
 		d.Offset++
 		if data == 0x0 {
-			// We advance the offset PAST the delimiter if we hit one
-			d.Offset++
+			//// We advance the offset PAST the delimiter if we hit one
+			//d.Offset++
 			return r
 		}
 		r = append(r, data)
@@ -34,11 +34,24 @@ func (d *DatagramBuffer) ReadUntilDelimiter() []byte {
 type Datagram struct {
 	Opcode      string
 	RrqFilename string
+	RrqMode     string
 }
 
-func destructureDatagram(d DatagramBuffer) (Datagram, error) {
+const datagramMinimum = 3
+
+const OPCODE_RRQ = "RRQ"
+const OPCODE_WRQ = "WRQ"
+const OPCODE_DATA = "DATA"
+const OPCODE_ACK = "ACK"
+const OPCODE_ERROR = "ERROR"
+
+func DestructureDatagram(d DatagramBuffer) (Datagram, error) {
 	ret := Datagram{}
-	//TODO: check total size of the datagram - it's it's less than the minimum, then error out
+
+	if len(d.Buffer) <= datagramMinimum {
+		return ret, errors.New("Malformed data")
+	}
+
 	var err error
 	ret.Opcode, err = opcode(binary.BigEndian.Uint16(d.Buffer[0:2]))
 	if err != nil {
@@ -47,18 +60,18 @@ func destructureDatagram(d DatagramBuffer) (Datagram, error) {
 
 	//Now we have a few options, depending on the opcode
 	switch ret.Opcode {
-	case "RRQ":
+	case OPCODE_RRQ:
 		err = destructureDatagramRRQ(d, &ret)
 		if err != nil {
 			return ret, err
 		}
-	case "WRQ":
+	case OPCODE_WRQ:
 		return ret, nil
-	case "DATA":
+	case OPCODE_DATA:
 		return ret, nil
-	case "ACK":
+	case OPCODE_ACK:
 		return ret, nil
-	case "ERROR":
+	case OPCODE_ERROR:
 		return ret, nil
 	}
 
@@ -68,6 +81,10 @@ func destructureDatagram(d DatagramBuffer) (Datagram, error) {
 func destructureDatagramRRQ(d DatagramBuffer, ret *Datagram) error {
 	d.Offset = 2 //we want to read the filename
 	ret.RrqFilename = string(d.ReadUntilDelimiter())
+	ret.RrqMode = string(d.ReadUntilDelimiter())
+	if ret.RrqMode != "octet" {
+		return errors.New("We only support `octect` for now")
+	}
 	return nil
 }
 
