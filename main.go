@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"gotftp/src"
-	"math/rand"
 	"net"
-	"time"
 )
 
 //TODO: let's get a version out without using goroutines - maybe we just treat it all as a
@@ -17,6 +15,11 @@ import (
 
 // Set up some of the globals we're going to use.
 const tftpDirectory = "./files"
+
+// SessionKey will simply give us the key used to index active sessions
+func SessionKey(a *net.UDPAddr) string {
+	return fmt.Sprintf("%v:%v", a.IP, a.Port)
+}
 
 func main() {
 	s, err := net.ResolveUDPAddr("udp4", ":6999")
@@ -31,16 +34,13 @@ func main() {
 	}
 
 	defer connection.Close()
-	buffer := make([]byte, 1024)
-	rand.Seed(time.Now().Unix())
 
-	//var readSessions []src.RRQSession
-	var session *src.RRQSession
+	var sessions map[string]*src.RRQSession = map[string]*src.RRQSession{}
 
 	for {
+		buffer := make([]byte, 1024) //this needs to be reset
 		n, addr, err := connection.ReadFromUDP(buffer)
-		//n, _, err := connection.ReadFromUDP(buffer)
-		fmt.Print("-> ", string(buffer[0:n-1]))
+		fmt.Printf("-> %v\n", buffer[0:n])
 
 		if err != nil {
 			fmt.Println(err)
@@ -53,29 +53,36 @@ func main() {
 		}
 
 		dgo, err := src.DestructureDatagram(d)
-		fmt.Println(dgo)
-
 		var data []byte
 		switch dgo.Opcode {
 		case src.OPCODE_RRQ:
-			fmt.Println("Got a RRQ")
-			session, err = src.SetupRRQSession(dgo, addr)
+			session, err := src.SetupRRQSession(dgo, addr)
 			if err != nil {
-				fmt.Println("Got a RRQ error")
 				data = src.GenerateErrorMessage(err.Error(), src.NOT_DEFINED)
 				break
 			}
 			data, _ = src.GenerateRRQMessage(session)
+			sessions[SessionKey(addr)] = session
 		case src.OPCODE_ACK:
-			fmt.Println("Got an ACK")
-			src.AcknowledgeRRQSession(session)
-			data, _ = src.GenerateRRQMessage(session)
+			//So we need to see _which_ block this is an acknowledgement for
+			if src.AcknowledgeRRQSession(sessions[SessionKey(addr)], dgo) != nil {
+				data = src.GenerateErrorMessage(err.Error(), src.NOT_DEFINED)
+				break
+			}
+
+			if !sessions[SessionKey(addr)].Completed {
+				data, _ = src.GenerateRRQMessage(sessions[SessionKey(addr)])
+			}
 		default:
 			data = src.GenerateErrorMessage("this shit doesnt work yet", src.NOT_DEFINED)
 		}
 
-		fmt.Printf("data: %s\n", string(data))
-		_, err = connection.WriteToUDP(data, addr)
+		//fmt.Printf("data: %s\n", string(data))
+		if len(data) > 0 {
+			_, err = connection.WriteToUDP(data, addr)
+		} else {
+			fmt.Println("No data to send, skipping")
+		}
 		if err != nil {
 			fmt.Println(err)
 			return

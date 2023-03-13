@@ -11,12 +11,19 @@ import (
 This file contains all the logic for a RRQ session
 */
 
+const dataSize = 512
+
 type RRQSession struct {
 	Filename         string
 	RequesterAddress *net.UDPAddr //we use this to keep track of what's what
-	BlockNumber      int          //The current block we're sending
+	BlockNumber      uint16       //The current block we're sending
 	FileData         []byte
+	Completed        bool
 }
+
+// The two following functions work in combination with one another
+// Only once a session is ACKed will we move forward the write buffer
+// Until that point, GenerateRRQMessage could potentially keep pushing out the same chunk of data
 
 func SetupRRQSession(incoming Datagram, requesterAddr *net.UDPAddr) (*RRQSession, error) {
 	fmt.Sprintf("Trying to open %v\n", incoming.RrqFilename)
@@ -38,17 +45,27 @@ func SetupRRQSession(incoming Datagram, requesterAddr *net.UDPAddr) (*RRQSession
 	}, nil
 }
 
-func AcknowledgeRRQSession(sess *RRQSession) {
+func AcknowledgeRRQSession(sess *RRQSession, datagram Datagram) error {
 	// since we have an acknowledgement, we don't need to keep track of the whole string anymore ...
-	if len(sess.FileData) >= dataSize {
-		sess.FileData = sess.FileData[dataSize:]
-	} else { //we've actually already sent the data, so we send an empty array
-		sess.FileData = []byte{}
-	}
-	sess.BlockNumber++
-}
 
-const dataSize = 512
+	if sess.Completed && len(sess.Filename) > 0 {
+		return errors.New("SESSION MARKED COMPLETED BUT STILL HAS DATA IN BUFFER")
+	}
+
+	//We might actually be resending here - so we only increment if the acknowledgement is the next block
+	//else we don't actually advance through to the next
+	if datagram.AckBlock == sess.BlockNumber {
+		sess.BlockNumber++
+		if len(sess.FileData) >= dataSize {
+			sess.FileData = sess.FileData[dataSize:]
+		} else { //we've actually already sent the data, so we send an empty array
+			sess.FileData = []byte{}
+		}
+	} //TODO: should we be throwing an error here if we get a datagram with a Block that's not equal to the current?
+	// TODO: check spec for above case
+
+	return nil
+}
 
 func GenerateRRQMessage(session *RRQSession) ([]byte, error) {
 	//We break this sucker into 512k chunks
@@ -62,7 +79,12 @@ func GenerateRRQMessage(session *RRQSession) ([]byte, error) {
 	//now we work out whether this is the end or not
 	head := session.FileData
 	if len(session.FileData) >= dataSize {
+		// There's more data to send, so only send part of it
 		head = session.FileData[0:dataSize]
+	} else {
+		//we've reached the end of the line - anything less that 512 bytes will signal the end
+		//And wso we mark the session as being complete
+		session.Completed = true
 	}
 	return append(ret, head...), nil
 }

@@ -3,6 +3,7 @@ package src
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 // This is going to be stolen straight from https://github.com/vcabbage/go-tftp/blob/master/datagram.go:97
@@ -35,6 +36,7 @@ type Datagram struct {
 	Opcode      string
 	RrqFilename string
 	RrqMode     string
+	AckBlock    uint16
 }
 
 const datagramMinimum = 3
@@ -57,7 +59,7 @@ func DestructureDatagram(d DatagramBuffer) (Datagram, error) {
 	if err != nil {
 		return ret, err
 	}
-
+	fmt.Println("OPCODE :", ret.Opcode)
 	//Now we have a few options, depending on the opcode
 	switch ret.Opcode {
 	case OPCODE_RRQ:
@@ -70,6 +72,11 @@ func DestructureDatagram(d DatagramBuffer) (Datagram, error) {
 	case OPCODE_DATA:
 		return ret, nil
 	case OPCODE_ACK:
+		fmt.Sprintf("Got an ACK with block %v\n", string(d.Buffer[2:4]))
+		err = destructureDatagramACK(d, &ret)
+		if err != nil {
+			return ret, err
+		}
 		return ret, nil
 	case OPCODE_ERROR:
 		return ret, nil
@@ -88,6 +95,12 @@ func destructureDatagramRRQ(d DatagramBuffer, ret *Datagram) error {
 	return nil
 }
 
+func destructureDatagramACK(d DatagramBuffer, ret *Datagram) error {
+	fmt.Sprintf("Got an ACK with block %v\n", string(d.Buffer[2:4]))
+	ret.AckBlock = binary.BigEndian.Uint16(d.Buffer[2:4])
+	return nil
+}
+
 func constructDatagram(d Datagram) (DatagramBuffer, error) {
 	return DatagramBuffer{}, nil
 }
@@ -96,17 +109,15 @@ func constructDatagram(d Datagram) (DatagramBuffer, error) {
 func opcode(o uint16) (string, error) {
 	switch o {
 	case 0x1:
-		return "RRQ", nil
+		return OPCODE_RRQ, nil
 	case 0x2:
-		return "WRQ", nil
+		return OPCODE_WRQ, nil
 	case 0x3:
-		return "DATA", nil
+		return OPCODE_DATA, nil
 	case 0x4:
-		return "ACK", nil
+		return OPCODE_ACK, nil
 	case 0x5:
-		return "ERROR", nil
+		return OPCODE_ERROR, nil
 	}
 	return "", errors.New("INVALID OPCODE") //TODO: this should actually codify a proper TFTP error
 }
-
-// Codify error codes
