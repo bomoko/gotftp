@@ -52,13 +52,19 @@ func main() {
 			Offset: 0,
 		}
 
-		dgo, err := src.DestructureDatagram(d)
+		// Buffer containing whatever we're going to send back across the wire
 		var data []byte
+
+		dgo, err := src.DestructureDatagram(d)
+		if err != nil {
+			data = src.GenerateErrorMessage(err)
+		}
+
 		switch dgo.Opcode {
 		case src.OPCODE_RRQ:
 			session, err := src.SetupRRQSession(dgo, addr)
 			if err != nil {
-				data = src.GenerateErrorMessage(err.Error(), src.NOT_DEFINED)
+				data = src.GenerateErrorMessage(err)
 				break
 			}
 			data, _ = src.GenerateRRQMessage(session)
@@ -66,7 +72,7 @@ func main() {
 		case src.OPCODE_ACK:
 			//So we need to see _which_ block this is an acknowledgement for
 			if src.AcknowledgeRRQSession(sessions[SessionKey(addr)], dgo) != nil {
-				data = src.GenerateErrorMessage(err.Error(), src.NOT_DEFINED)
+				data = src.GenerateErrorMessage(err)
 				break
 			}
 
@@ -74,7 +80,7 @@ func main() {
 				data, _ = src.GenerateRRQMessage(sessions[SessionKey(addr)])
 			}
 		default:
-			data = src.GenerateErrorMessage("this shit doesnt work yet", src.NOT_DEFINED)
+			data = src.GenerateErrorMessage(src.GenerateTFTPError(src.NOT_DEFINED, "Only able to send you files right now"))
 		}
 
 		//fmt.Printf("data: %s\n", string(data))

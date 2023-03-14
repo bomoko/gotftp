@@ -90,7 +90,7 @@ func destructureDatagramRRQ(d DatagramBuffer, ret *Datagram) error {
 	ret.RrqFilename = string(d.ReadUntilDelimiter())
 	ret.RrqMode = string(d.ReadUntilDelimiter())
 	if ret.RrqMode != "octet" {
-		return errors.New("We only support `octect` for now")
+		return GenerateTFTPError(ILLEGAL_TFTP_OPERATION, "We only support `octect` for now")
 	}
 	return nil
 }
