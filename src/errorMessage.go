@@ -47,7 +47,7 @@ type TFTP_error struct {
 }
 
 func (e TFTP_error) Error() string {
-	return fmt.Sprintf("Error ID: %v - message: %v", ConvertErrorCodeToString(e.ErrorCode), e.Error())
+	return fmt.Sprintf("Error ID: %v - message: %v", ConvertErrorCodeToString(e.ErrorCode), e.Err.Error())
 }
 
 func ConvertErrorCodeToString(code uint16) string {
