@@ -8,7 +8,7 @@ So, now, I'm going to implement it in golang, and maybe try do something interes
 
 * ~~Implement RRQ~~
 * Implement netascii
-* Implement WRQ
+* ~~Implement WRQ~~
 * Better file handling for RRQ - don't read the whole file into memory
 * Better file handling for RRQ - allow file pools for read-only files
 
