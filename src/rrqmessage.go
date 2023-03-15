@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 )
 
 /**
@@ -19,6 +20,7 @@ type RRQSession struct {
 	BlockNumber      uint16       //The current block we're sending
 	FileData         []byte
 	Completed        bool
+	ClosedAt         time.Time
 }
 
 // The two following functions work in combination with one another
@@ -86,6 +88,7 @@ func GenerateRRQMessage(session *RRQSession) ([]byte, error) {
 		//we've reached the end of the line - anything less that 512 bytes will signal the end
 		//And wso we mark the session as being complete
 		session.Completed = true
+		session.ClosedAt = time.Now()
 	}
 	return append(ret, head...), nil
 }

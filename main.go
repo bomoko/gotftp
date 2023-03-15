@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gotftp/src"
 	"net"
+	"time"
 )
 
 //TODO: let's get a version out without using goroutines - maybe we just treat it all as a
@@ -53,6 +54,26 @@ func main() {
 	workingBuffer := make([]byte, 1024)
 
 	for {
+
+		//First things first, let's clean up any completed sessions
+		timeout := 10.0 // ten seconds timeout from the connection being closed to when we kill off the session
+		for k, e := range WRQSessions {
+			if e.Completed {
+				if time.Now().Sub(e.ClosedAt).Seconds() > timeout {
+					delete(WRQSessions, k)
+				}
+			}
+		}
+
+		for k, e := range RRQSessions {
+			if e.Completed {
+				if time.Now().Sub(e.ClosedAt).Seconds() > timeout {
+					delete(RRQSessions, k)
+				}
+			}
+		}
+
+		fmt.Printf("Currently have %v number of active read sessions and %v number of active write sessions \n", len(RRQSessions), len(WRQSessions))
 
 		n, addr, err := connection.ReadFromUDP(workingBuffer)
 		buffer := workingBuffer[0:n] //only pull the data that we actually read.

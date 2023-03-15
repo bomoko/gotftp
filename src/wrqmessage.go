@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 )
 
 /**
@@ -18,6 +19,7 @@ type WRQSession struct {
 	BlockNumber      uint16       //The current block we're sending
 	FileData         []byte
 	Completed        bool
+	ClosedAt         time.Time
 }
 
 // The two following functions work in combination with one another
@@ -55,11 +57,8 @@ func AcknowledgeWRQSession(sess *WRQSession, datagram Datagram) ([]byte, error) 
 		return GenerateWRQMessage(sess)
 	}
 	//else, we push forward with the write, and ack the incoming data
-	fmt.Println("GOT DATA: ", string(datagram.WrqData))
-
 	if len(datagram.WrqData) > 0 && sess.Completed == false { // we write any _actual_ data - this could signal a session completion below
-		n, err := sess.FilePointer.Write(datagram.WrqData) //might need to keep track of the n
-		fmt.Println("Wrote so many bytes: ", n)
+		_, err := sess.FilePointer.Write(datagram.WrqData) //might need to keep track of the n
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +67,7 @@ func AcknowledgeWRQSession(sess *WRQSession, datagram Datagram) ([]byte, error) 
 	if len(datagram.WrqData) < dataSize {
 		//this is the last stuff we need to write, so lets close this sucker up and mark the session as done
 		sess.Completed = true
-		fmt.Println("CLOSING session id ", sess.BlockNumber)
+		sess.ClosedAt = time.Now()
 		err := sess.FilePointer.Close()
 		if err != nil {
 			return nil, err
