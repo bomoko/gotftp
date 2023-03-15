@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"gotftp/src"
@@ -33,7 +34,9 @@ func main() {
 	//TODO: we should do some kind of check and normalization on this directory name.
 	flag.StringVar(&tftpDirectory, "d", "./files/", "Directory to read/write files to")
 	flag.IntVar(&port, "p", 6999, "Port to run TFTP server on")
-	flag.BoolVar(&enableWrites, "write-enabled", false, "Allow users to write to the server (potentially unsafe)")
+	flag.BoolVar(&enableWrites, "w", false, "Allow users to write to the server (potentially unsafe)")
+
+	flag.Parse()
 
 	s, err := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%v", port))
 	if err != nil {
@@ -110,6 +113,10 @@ func main() {
 			data, _ = src.GenerateRRQMessage(session)
 			RRQSessions[SessionKey(addr)] = session
 		case src.OPCODE_WRQ:
+			if !enableWrites {
+				data = src.GenerateErrorMessage(errors.New("Not accepting writes at the moment"))
+				break
+			}
 			session, errW := src.SetupWRQSession(tftpDirectory, dgo, addr)
 			if errW != nil {
 				data = src.GenerateErrorMessage(errW)
