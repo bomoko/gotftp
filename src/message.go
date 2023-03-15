@@ -33,10 +33,11 @@ func (d *DatagramBuffer) ReadUntilDelimiter() []byte {
 // DatagramBuffer, or be loaded from one
 
 type Datagram struct {
-	Opcode      string
-	RrqFilename string
-	RrqMode     string
-	AckBlock    uint16
+	Opcode   string
+	Filename string
+	Mode     string
+	AckBlock uint16
+	WrqData  []byte
 }
 
 const datagramMinimum = 3
@@ -68,8 +69,15 @@ func DestructureDatagram(d DatagramBuffer) (Datagram, error) {
 			return ret, err
 		}
 	case OPCODE_WRQ:
-		return ret, nil
+		err = destructureDatagramWRQ(d, &ret)
+		if err != nil {
+			return ret, err
+		}
 	case OPCODE_DATA:
+		err = descructureDatagramDATA(d, &ret)
+		if err != nil {
+			return ret, err
+		}
 		return ret, nil
 	case OPCODE_ACK:
 		fmt.Sprintf("Got an ACK with block %v\n", string(d.Buffer[2:4]))
@@ -87,11 +95,27 @@ func DestructureDatagram(d DatagramBuffer) (Datagram, error) {
 
 func destructureDatagramRRQ(d DatagramBuffer, ret *Datagram) error {
 	d.Offset = 2 //we want to read the filename
-	ret.RrqFilename = string(d.ReadUntilDelimiter())
-	ret.RrqMode = string(d.ReadUntilDelimiter())
-	if ret.RrqMode != "octet" {
+	ret.Filename = string(d.ReadUntilDelimiter())
+	ret.Mode = string(d.ReadUntilDelimiter())
+	if ret.Mode != "octet" {
 		return GenerateTFTPError(ILLEGAL_TFTP_OPERATION, "We only support `octect` for now")
 	}
+	return nil
+}
+
+func destructureDatagramWRQ(d DatagramBuffer, ret *Datagram) error {
+	d.Offset = 2 //we want to read the filename
+	ret.Filename = string(d.ReadUntilDelimiter())
+	ret.Mode = string(d.ReadUntilDelimiter())
+	if ret.Mode != "octet" {
+		return GenerateTFTPError(ILLEGAL_TFTP_OPERATION, "We only support `octect` for now")
+	}
+	return nil
+}
+
+func descructureDatagramDATA(d DatagramBuffer, ret *Datagram) error {
+	ret.AckBlock = binary.BigEndian.Uint16(d.Buffer[2:4])
+	ret.WrqData = d.Buffer[4:]
 	return nil
 }
 
@@ -119,5 +143,5 @@ func opcode(o uint16) (string, error) {
 	case 0x5:
 		return OPCODE_ERROR, nil
 	}
-	return "", errors.New("INVALID OPCODE") //TODO: this should actually codify a proper TFTP error
+	return "", GenerateTFTPError(ILLEGAL_TFTP_OPERATION, "Invalid Opcode")
 }

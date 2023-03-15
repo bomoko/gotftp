@@ -25,20 +25,22 @@ type RRQSession struct {
 // Only once a session is ACKed will we move forward the write buffer
 // Until that point, GenerateRRQMessage could potentially keep pushing out the same chunk of data
 
-func SetupRRQSession(incoming Datagram, requesterAddr *net.UDPAddr) (*RRQSession, error) {
-	fmt.Sprintf("Trying to open %v\n", incoming.RrqFilename)
-	if _, err := os.Stat("./files/" + incoming.RrqFilename); errors.Is(err, os.ErrNotExist) {
-		return nil, errors.New(incoming.RrqFilename + " does not exit")
+func SetupRRQSession(filesDirectory string, incoming Datagram, requesterAddr *net.UDPAddr) (*RRQSession, error) {
+	fmt.Sprintf("Trying to open %v\n", incoming.Filename)
+
+	fullyQualifiedFilename := filesDirectory + "/" + incoming.Filename
+	if _, err := os.Stat(fullyQualifiedFilename); errors.Is(err, os.ErrNotExist) {
+		return nil, errors.New(incoming.Filename + " does not exit")
 	}
 
-	dat, err := os.ReadFile("./files/" + incoming.RrqFilename)
+	dat, err := os.ReadFile(fullyQualifiedFilename)
 	if err != nil {
 		fmt.Println("Got an error opening file")
 		return nil, errors.New("File not found")
 	}
 
 	return &RRQSession{
-		Filename:         "",
+		Filename:         fullyQualifiedFilename,
 		RequesterAddress: nil,
 		BlockNumber:      1,
 		FileData:         dat,
@@ -46,16 +48,15 @@ func SetupRRQSession(incoming Datagram, requesterAddr *net.UDPAddr) (*RRQSession
 }
 
 func AcknowledgeRRQSession(sess *RRQSession, datagram Datagram) error {
-	// since we have an acknowledgement, we don't need to keep track of the whole string anymore ...
-
-	if sess.Completed && len(sess.Filename) > 0 {
-		return errors.New("SESSION MARKED COMPLETED BUT STILL HAS DATA IN BUFFER")
-	}
 
 	//We might actually be resending here - so we only increment if the acknowledgement is the next block
 	//else we don't actually advance through to the next
 	if datagram.AckBlock == sess.BlockNumber {
-		sess.BlockNumber++
+		// if the session is completed, we don't want to increment the block number
+		// because we may need to resend this block numerous times
+		if !sess.Completed {
+			sess.BlockNumber++
+		}
 		if len(sess.FileData) >= dataSize {
 			sess.FileData = sess.FileData[dataSize:]
 		} else { //we've actually already sent the data, so we send an empty array

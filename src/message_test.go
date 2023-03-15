@@ -23,6 +23,12 @@ func Test_opcode(t *testing.T) {
 			args:    args{o: binary.BigEndian.Uint16(append(append([]byte{0x0, 0x1}, []byte("hello.txt")...), 0x0)[0:2])},
 		},
 		{
+			name:    "Write request",
+			want:    "WRQ",
+			wantErr: false,
+			args:    args{o: binary.BigEndian.Uint16(append(append([]byte{0x0, 0x2}, []byte("hello.txt")...), 0x0)[0:2])},
+		},
+		{
 			name:    "Data request",
 			want:    "DATA",
 			wantErr: false,
@@ -134,9 +140,9 @@ func Test_destructureDatagramRRQ(t *testing.T) {
 					Offset: 0,
 				},
 				ret: &Datagram{
-					Opcode:      "",
-					RrqFilename: "",
-					RrqMode:     "",
+					Opcode:   "",
+					Filename: "",
+					Mode:     "",
 				},
 			},
 			wantErr:      false,
@@ -150,9 +156,9 @@ func Test_destructureDatagramRRQ(t *testing.T) {
 					Offset: 0,
 				},
 				ret: &Datagram{
-					Opcode:      "",
-					RrqFilename: "",
-					RrqMode:     "",
+					Opcode:   "",
+					Filename: "",
+					Mode:     "",
 				},
 			},
 			wantErr:      false,
@@ -165,8 +171,8 @@ func Test_destructureDatagramRRQ(t *testing.T) {
 			if err := destructureDatagramRRQ(tt.args.d, tt.args.ret); (err != nil) != tt.wantErr {
 				t.Errorf("destructureDatagramRRQ() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if tt.wantFilename != tt.args.ret.RrqFilename {
-				t.Errorf("destructureDatagramRRQ() error = filename wrong wanted '%v' got '%v'", tt.wantFilename, tt.args.ret.RrqFilename)
+			if tt.wantFilename != tt.args.ret.Filename {
+				t.Errorf("destructureDatagramRRQ() error = filename wrong wanted '%v' got '%v'", tt.wantFilename, tt.args.ret.Filename)
 			}
 		})
 	}

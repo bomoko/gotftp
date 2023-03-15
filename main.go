@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"gotftp/src"
 	"net"
@@ -14,7 +15,11 @@ import (
 // TODO: Deal with the standard binary option as a first step - netascii next
 
 // Set up some of the globals we're going to use.
-const tftpDirectory = "./files"
+var tftpDirectory string
+
+// Flags
+var port int
+var enableWrites bool
 
 // SessionKey will simply give us the key used to index active sessions
 func SessionKey(a *net.UDPAddr) string {
@@ -22,7 +27,14 @@ func SessionKey(a *net.UDPAddr) string {
 }
 
 func main() {
-	s, err := net.ResolveUDPAddr("udp4", ":6999")
+
+	//Set up flags
+	//TODO: we should do some kind of check and normalization on this directory name.
+	flag.StringVar(&tftpDirectory, "d", "./files/", "Directory to read/write files to")
+	flag.IntVar(&port, "p", 6999, "Port to run TFTP server on")
+	flag.BoolVar(&enableWrites, "write-enabled", false, "Allow users to write to the server (potentially unsafe)")
+
+	s, err := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%v", port))
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -35,11 +47,15 @@ func main() {
 
 	defer connection.Close()
 
-	var sessions map[string]*src.RRQSession = map[string]*src.RRQSession{}
+	RRQSessions := map[string]*src.RRQSession{}
+	WRQSessions := map[string]*src.WRQSession{}
+
+	workingBuffer := make([]byte, 1024)
 
 	for {
-		buffer := make([]byte, 1024) //this needs to be reset
-		n, addr, err := connection.ReadFromUDP(buffer)
+
+		n, addr, err := connection.ReadFromUDP(workingBuffer)
+		buffer := workingBuffer[0:n] //only pull the data that we actually read.
 		fmt.Printf("-> %v\n", buffer[0:n])
 
 		if err != nil {
@@ -57,33 +73,44 @@ func main() {
 
 		dgo, err := src.DestructureDatagram(d)
 		if err != nil {
+			// we bail
 			data = src.GenerateErrorMessage(err)
+			_, err = connection.WriteToUDP(data, addr)
+			continue
 		}
 
 		switch dgo.Opcode {
 		case src.OPCODE_RRQ:
-			session, err := src.SetupRRQSession(dgo, addr)
-			if err != nil {
-				data = src.GenerateErrorMessage(err)
+			session, errR := src.SetupRRQSession(tftpDirectory, dgo, addr)
+			if errR != nil {
+				data = src.GenerateErrorMessage(errR)
 				break
 			}
 			data, _ = src.GenerateRRQMessage(session)
-			sessions[SessionKey(addr)] = session
-		case src.OPCODE_ACK:
-			//So we need to see _which_ block this is an acknowledgement for
-			if src.AcknowledgeRRQSession(sessions[SessionKey(addr)], dgo) != nil {
-				data = src.GenerateErrorMessage(err)
+			RRQSessions[SessionKey(addr)] = session
+		case src.OPCODE_WRQ:
+			session, errW := src.SetupWRQSession(tftpDirectory, dgo, addr)
+			if errW != nil {
+				data = src.GenerateErrorMessage(errW)
 				break
 			}
-
-			if !sessions[SessionKey(addr)].Completed {
-				data, _ = src.GenerateRRQMessage(sessions[SessionKey(addr)])
+			data, _ = src.GenerateWRQMessage(session)
+			WRQSessions[SessionKey(addr)] = session
+		case src.OPCODE_DATA: //we've got incoming data
+			data, _ = src.AcknowledgeWRQSession(WRQSessions[SessionKey(addr)], dgo)
+		case src.OPCODE_ACK:
+			//So we need to see _which_ block this is an acknowledgement for
+			if errA := src.AcknowledgeRRQSession(RRQSessions[SessionKey(addr)], dgo); errA != nil {
+				data = src.GenerateErrorMessage(errA)
+				break
+			}
+			if !RRQSessions[SessionKey(addr)].Completed {
+				data, _ = src.GenerateRRQMessage(RRQSessions[SessionKey(addr)])
 			}
 		default:
 			data = src.GenerateErrorMessage(src.GenerateTFTPError(src.NOT_DEFINED, "Only able to send you files right now"))
 		}
 
-		//fmt.Printf("data: %s\n", string(data))
 		if len(data) > 0 {
 			_, err = connection.WriteToUDP(data, addr)
 		} else {

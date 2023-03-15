@@ -4,6 +4,14 @@ This is purely an exercise in go development for me.
 I've been wanting to implement TFTP for years - I've had a copy of the RFC printed out and in my stack of papers for ages.
 So, now, I'm going to implement it in golang, and maybe try do something interesting with the backend. Perhaps minio.
 
+## TODO
+
+* ~~Implement RRQ~~
+* Implement netascii
+* Implement WRQ
+* Better file handling for RRQ - don't read the whole file into memory
+* Better file handling for RRQ - allow file pools for read-only files
+
 ## Notes while devving
 
 * I've got a `./files` directory here to be used as the source and target for TFTP while devving. Will change that up to take in a directory in the future
