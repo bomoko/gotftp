@@ -4,7 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"gotftp/src"
+	"gotftp/goftp"
 	"net"
 	"time"
 )
@@ -51,8 +51,8 @@ func main() {
 
 	defer connection.Close()
 
-	RRQSessions := map[string]*src.RRQSession{}
-	WRQSessions := map[string]*src.WRQSession{}
+	RRQSessions := map[string]*goftp.RRQSession{}
+	WRQSessions := map[string]*goftp.WRQSession{}
 
 	workingBuffer := make([]byte, 1024)
 
@@ -87,7 +87,7 @@ func main() {
 			return
 		}
 
-		d := src.DatagramBuffer{
+		d := goftp.DatagramBuffer{
 			Buffer: buffer,
 			Offset: 0,
 		}
@@ -95,48 +95,48 @@ func main() {
 		// Buffer containing whatever we're going to send back across the wire
 		var data []byte
 
-		dgo, err := src.DestructureDatagram(d)
+		dgo, err := goftp.DestructureDatagram(d)
 		if err != nil {
 			// we bail
-			data = src.GenerateErrorMessage(err)
+			data = goftp.GenerateErrorMessage(err)
 			_, err = connection.WriteToUDP(data, addr)
 			continue
 		}
 
 		switch dgo.Opcode {
-		case src.OPCODE_RRQ:
-			session, errR := src.SetupRRQSession(tftpDirectory, dgo, addr)
+		case goftp.OPCODE_RRQ:
+			session, errR := goftp.SetupRRQSession(tftpDirectory, dgo, addr)
 			if errR != nil {
-				data = src.GenerateErrorMessage(errR)
+				data = goftp.GenerateErrorMessage(errR)
 				break
 			}
-			data, _ = src.GenerateRRQMessage(session)
+			data, _ = goftp.GenerateRRQMessage(session)
 			RRQSessions[SessionKey(addr)] = session
-		case src.OPCODE_WRQ:
+		case goftp.OPCODE_WRQ:
 			if !enableWrites {
-				data = src.GenerateErrorMessage(errors.New("Not accepting writes at the moment"))
+				data = goftp.GenerateErrorMessage(errors.New("Not accepting writes at the moment"))
 				break
 			}
-			session, errW := src.SetupWRQSession(tftpDirectory, dgo, addr)
+			session, errW := goftp.SetupWRQSession(tftpDirectory, dgo, addr)
 			if errW != nil {
-				data = src.GenerateErrorMessage(errW)
+				data = goftp.GenerateErrorMessage(errW)
 				break
 			}
-			data, _ = src.GenerateWRQMessage(session)
+			data, _ = goftp.GenerateWRQMessage(session)
 			WRQSessions[SessionKey(addr)] = session
-		case src.OPCODE_DATA: //we've got incoming data
-			data, _ = src.AcknowledgeWRQSession(WRQSessions[SessionKey(addr)], dgo)
-		case src.OPCODE_ACK:
+		case goftp.OPCODE_DATA: //we've got incoming data
+			data, _ = goftp.AcknowledgeWRQSession(WRQSessions[SessionKey(addr)], dgo)
+		case goftp.OPCODE_ACK:
 			//So we need to see _which_ block this is an acknowledgement for
-			if errA := src.AcknowledgeRRQSession(RRQSessions[SessionKey(addr)], dgo); errA != nil {
-				data = src.GenerateErrorMessage(errA)
+			if errA := goftp.AcknowledgeRRQSession(RRQSessions[SessionKey(addr)], dgo); errA != nil {
+				data = goftp.GenerateErrorMessage(errA)
 				break
 			}
 			if !RRQSessions[SessionKey(addr)].Completed {
-				data, _ = src.GenerateRRQMessage(RRQSessions[SessionKey(addr)])
+				data, _ = goftp.GenerateRRQMessage(RRQSessions[SessionKey(addr)])
 			}
 		default:
-			data = src.GenerateErrorMessage(src.GenerateTFTPError(src.NOT_DEFINED, "Only able to send you files right now"))
+			data = goftp.GenerateErrorMessage(goftp.GenerateTFTPError(goftp.NOT_DEFINED, "Only able to send you files right now"))
 		}
 
 		if len(data) > 0 {
