@@ -72,10 +72,11 @@ func AcknowledgeRRQSession(sess *RRQSession, datagram Datagram) error {
 
 func GenerateRRQMessage(session *RRQSession) ([]byte, error) {
 	//We break this sucker into 512k chunks
+
 	ret := []byte{
 		0x0,
 		0x3,
-		0x0,
+		byte(session.BlockNumber >> 8),
 		byte(session.BlockNumber),
 	}
 
