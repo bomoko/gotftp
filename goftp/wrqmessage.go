@@ -87,7 +87,7 @@ func GenerateWRQMessage(session *WRQSession) ([]byte, error) {
 	ret := []byte{
 		0x0,
 		0x4, //This is an ack - so we drop this in here
-		0x0,
+		byte(session.BlockNumber >> 8),
 		byte(session.BlockNumber),
 	}
 
