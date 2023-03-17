@@ -46,14 +46,19 @@ func main() {
 
 	workingBuffer := make([]byte, 1024)
 
-	for {
+	logSessionNumbers := func() {
+		theLogger.Printf("Currently have %v number of active read sessions and %v number of active write sessions \n", len(RRQSessions), len(WRQSessions))
+	}
 
+	for {
 		//First things first, let's clean up any completed sessions
 		timeout := 10.0 // ten seconds timeout from the connection being closed to when we kill off the session
 		for k, e := range WRQSessions {
 			if e.Completed {
 				if time.Now().Sub(e.ClosedAt).Seconds() > timeout {
 					delete(WRQSessions, k)
+					theLogger.Printf("Write request from IP:%v for file %v complete", k, e.Filename)
+					logSessionNumbers()
 				}
 			}
 		}
@@ -62,11 +67,11 @@ func main() {
 			if e.Completed {
 				if time.Now().Sub(e.ClosedAt).Seconds() > timeout {
 					delete(RRQSessions, k)
+					theLogger.Printf("Read request from IP:%v for file %v complete", k, e.Filename)
+					logSessionNumbers()
 				}
 			}
 		}
-
-		theLogger.Printf("Currently have %v number of active read sessions and %v number of active write sessions \n", len(RRQSessions), len(WRQSessions))
 
 		n, addr, err := connection.ReadFromUDP(workingBuffer)
 		buffer := workingBuffer[0:n] //only pull the data that we actually read.
@@ -94,6 +99,7 @@ func main() {
 
 		switch dgo.Opcode {
 		case goftp.OPCODE_RRQ:
+			theLogger.Printf("Got Read request from IP:%v%v for file %v", addr.IP, addr.Port, dgo.Filename)
 			session, errR := goftp.SetupRRQSession(cleanTftpDirectory(), dgo, addr)
 			if errR != nil {
 				data = goftp.GenerateErrorMessage(errR)
@@ -102,6 +108,7 @@ func main() {
 			data, _ = goftp.GenerateRRQMessage(session)
 			RRQSessions[SessionKey(addr)] = session
 		case goftp.OPCODE_WRQ:
+			theLogger.Printf("Got Write request from IP:%v:%v for file %v", addr.IP, addr.Port, dgo.Filename)
 			if !enableWrites {
 				data = goftp.GenerateErrorMessage(errors.New("Not accepting writes at the moment"))
 				break
