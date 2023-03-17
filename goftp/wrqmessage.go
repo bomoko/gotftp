@@ -2,7 +2,6 @@ package goftp
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"time"
@@ -30,10 +29,8 @@ func SetupWRQSession(filesDirectory string, incoming Datagram, requesterAddr *ne
 
 	fullyQualifiedFilename := filesDirectory + "/" + incoming.Filename
 
-	fmt.Sprintf("Trying to open %v\n", incoming.Filename)
 	if _, err := os.Stat(fullyQualifiedFilename); errors.Is(err, os.ErrNotExist) {
 		// Here we are able to actually write
-
 		f, err := os.Create(fullyQualifiedFilename)
 		if err != nil {
 			return nil, err

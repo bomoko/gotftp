@@ -2,7 +2,6 @@ package goftp
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"time"
@@ -28,8 +27,6 @@ type RRQSession struct {
 // Until that point, GenerateRRQMessage could potentially keep pushing out the same chunk of data
 
 func SetupRRQSession(filesDirectory string, incoming Datagram, requesterAddr *net.UDPAddr) (*RRQSession, error) {
-	fmt.Sprintf("Trying to open %v\n", incoming.Filename)
-
 	fullyQualifiedFilename := filesDirectory + "/" + incoming.Filename
 	if _, err := os.Stat(fullyQualifiedFilename); errors.Is(err, os.ErrNotExist) {
 		return nil, errors.New(incoming.Filename + " does not exit")
@@ -37,8 +34,7 @@ func SetupRRQSession(filesDirectory string, incoming Datagram, requesterAddr *ne
 
 	dat, err := os.ReadFile(fullyQualifiedFilename)
 	if err != nil {
-		fmt.Println("Got an error opening file")
-		return nil, errors.New("File not found")
+		return nil, err
 	}
 
 	return &RRQSession{

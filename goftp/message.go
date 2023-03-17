@@ -3,7 +3,6 @@ package goftp
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 )
 
 // This is going to be stolen straight from https://github.com/vcabbage/go-tftp/blob/master/datagram.go:97
@@ -60,7 +59,6 @@ func DestructureDatagram(d DatagramBuffer) (Datagram, error) {
 	if err != nil {
 		return ret, err
 	}
-	fmt.Println("OPCODE :", ret.Opcode)
 	//Now we have a few options, depending on the opcode
 	switch ret.Opcode {
 	case OPCODE_RRQ:
@@ -80,7 +78,6 @@ func DestructureDatagram(d DatagramBuffer) (Datagram, error) {
 		}
 		return ret, nil
 	case OPCODE_ACK:
-		fmt.Sprintf("Got an ACK with block %v\n", string(d.Buffer[2:4]))
 		err = destructureDatagramACK(d, &ret)
 		if err != nil {
 			return ret, err
@@ -120,7 +117,6 @@ func descructureDatagramDATA(d DatagramBuffer, ret *Datagram) error {
 }
 
 func destructureDatagramACK(d DatagramBuffer, ret *Datagram) error {
-	fmt.Sprintf("Got an ACK with block %v\n", string(d.Buffer[2:4]))
 	ret.AckBlock = binary.BigEndian.Uint16(d.Buffer[2:4])
 	return nil
 }
