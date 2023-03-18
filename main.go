@@ -30,6 +30,7 @@ func main() {
 	theLogger := log.Default()
 	readFlags()
 
+	theLogger.Printf("Starting TFTP server on %v:%v\n\n", "localhost", port)
 	s, err := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%v", port))
 	if err != nil {
 		theLogger.Fatal(err)
