@@ -18,6 +18,7 @@ type RRQSession struct {
 	RequesterAddress *net.UDPAddr //we use this to keep track of what's what
 	BlockNumber      uint16       //The current block we're sending
 	FileData         []byte
+	FilePointer      *os.File
 	Completed        bool
 	ClosedAt         time.Time
 }
@@ -33,6 +34,7 @@ func SetupRRQSession(filesDirectory string, incoming Datagram, requesterAddr *ne
 	}
 
 	dat, err := os.ReadFile(fullyQualifiedFilename)
+	fp, err := os.Open(fullyQualifiedFilename)
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +44,7 @@ func SetupRRQSession(filesDirectory string, incoming Datagram, requesterAddr *ne
 		RequesterAddress: nil,
 		BlockNumber:      1,
 		FileData:         dat,
+		FilePointer:      fp,
 	}, nil
 }
 
@@ -76,16 +79,24 @@ func GenerateRRQMessage(session *RRQSession) ([]byte, error) {
 		byte(session.BlockNumber),
 	}
 
-	//now we work out whether this is the end or not
-	head := session.FileData
-	if len(session.FileData) >= dataSize {
-		// There's more data to send, so only send part of it
-		head = session.FileData[0:dataSize]
-	} else {
-		//we've reached the end of the line - anything less that 512 bytes will signal the end
-		//And wso we mark the session as being complete
+	dataBuff := make([]byte, dataSize)
+	n, err := session.FilePointer.Read(dataBuff) //we read in 512 bytes, if possible
+
+	if err != nil {
+		return dataBuff, err
+	}
+
+	if n < dataSize { //we've likely still got places to go
+		err = session.FilePointer.Close() //we can close this because we're going to save the data in the buffer
+		if err != nil {
+			return dataBuff, err
+		}
 		session.Completed = true
 		session.ClosedAt = time.Now()
 	}
-	return append(ret, head...), nil
+
+	//We'll keep track of the last packet's data, though
+	session.FileData = dataBuff[:n]
+
+	return append(ret, session.FileData...), nil
 }

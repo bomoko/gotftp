@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -42,7 +43,9 @@ func main() {
 	defer connection.Close()
 
 	RRQSessions := map[string]*goftp.RRQSession{}
+	var RRQSessionsMu sync.Mutex
 	WRQSessions := map[string]*goftp.WRQSession{}
+	var WRQSessionsMu sync.Mutex
 
 	workingBuffer := make([]byte, 1024)
 
@@ -50,28 +53,45 @@ func main() {
 		theLogger.Printf("Currently have %v number of active read sessions and %v number of active write sessions \n", len(RRQSessions), len(WRQSessions))
 	}
 
+	gc := func() {
+		// Note that I'm using the mutext TryLock functionality because
+		// we can simply skip over rather than wait for access in this context
+		// We'll eventually clean out the session
+		for {
+			timeout := 10.0 // ten seconds timeout from the connection being closed to when we kill off the session
+			for k, e := range WRQSessions {
+				if e.Completed {
+					if time.Now().Sub(e.ClosedAt).Seconds() > timeout {
+						if WRQSessionsMu.TryLock() {
+							delete(WRQSessions, k)
+							theLogger.Printf("Write request from IP:%v for file %v complete", k, e.Filename)
+							logSessionNumbers()
+							WRQSessionsMu.Unlock()
+						}
+					}
+				}
+			}
+
+			for k, e := range RRQSessions {
+				if e.Completed {
+					if time.Now().Sub(e.ClosedAt).Seconds() > timeout {
+						if RRQSessionsMu.TryLock() {
+							delete(RRQSessions, k)
+							theLogger.Printf("Read request from IP:%v for file %v complete", k, e.Filename)
+							logSessionNumbers()
+							RRQSessionsMu.Unlock()
+						}
+					}
+				}
+			}
+			time.Sleep(time.Second)
+		}
+	}
+
+	go gc()
+
 	for {
 		//First things first, let's clean up any completed sessions
-		timeout := 10.0 // ten seconds timeout from the connection being closed to when we kill off the session
-		for k, e := range WRQSessions {
-			if e.Completed {
-				if time.Now().Sub(e.ClosedAt).Seconds() > timeout {
-					delete(WRQSessions, k)
-					theLogger.Printf("Write request from IP:%v for file %v complete", k, e.Filename)
-					logSessionNumbers()
-				}
-			}
-		}
-
-		for k, e := range RRQSessions {
-			if e.Completed {
-				if time.Now().Sub(e.ClosedAt).Seconds() > timeout {
-					delete(RRQSessions, k)
-					theLogger.Printf("Read request from IP:%v for file %v complete", k, e.Filename)
-					logSessionNumbers()
-				}
-			}
-		}
 
 		n, addr, err := connection.ReadFromUDP(workingBuffer)
 		buffer := workingBuffer[0:n] //only pull the data that we actually read.
@@ -106,7 +126,9 @@ func main() {
 				break
 			}
 			data, _ = goftp.GenerateRRQMessage(session)
+			RRQSessionsMu.Lock()
 			RRQSessions[SessionKey(addr)] = session
+			RRQSessionsMu.Unlock()
 		case goftp.OPCODE_WRQ:
 			theLogger.Printf("Got Write request from IP:%v:%v for file %v", addr.IP, addr.Port, dgo.Filename)
 			if !enableWrites {
@@ -119,7 +141,9 @@ func main() {
 				break
 			}
 			data, _ = goftp.GenerateWRQMessage(session)
+			WRQSessionsMu.Lock()
 			WRQSessions[SessionKey(addr)] = session
+			WRQSessionsMu.Unlock()
 		case goftp.OPCODE_DATA: //we've got incoming data
 			data, _ = goftp.AcknowledgeWRQSession(WRQSessions[SessionKey(addr)], dgo)
 		case goftp.OPCODE_ACK:
